@@ -89,11 +89,107 @@ class NumberOfMedia:
 
 # (4)
 class TopOption:
-    def __init__(self, sTopOpt):
-        self.__topOpt = sTopOpt
+    """
+    Top Option.
 
-    def checkTopOpt(self):
-        pass  # 检查什么的太麻烦了，不想写了，等死吧
+    :param: sTopOpt: 长度小于7的字符串
+    """
+    def __init__(self, sTopOpt, oTopHalfspace=None):
+        self.__topOpt = sTopOpt
+        self.__topHS = oTopHalfspace
+
+    @property
+    def Opt(self):
+        return self.__topOpt
+
+    @Opt.setter
+    def Opt(self, aOpt):
+        self.__topOpt = aOpt
+
+    @property
+    def HS(self):
+        return self.__topHS
+
+    @HS.setter
+    def HS(self, oHalfspace):
+        self.__topHS = oHalfspace
+
+
+# (4a)
+class TopHalfspace:
+    # def __init__(self, tDepth=None, tAlphaR=np.array([]), tBetaR=np.array([]), tRho=np.array([]), tAlphaI=np.array([]),
+    #              tBetaI=np.array([])):
+    #     self.__depth = tDepth
+    #     self.__alphaR = np.array(tAlphaR)
+    #     self.__betaR = np.array(tBetaR)
+    #     self.__rho = np.array(tRho)
+    #     self.__alphaI = np.array(tAlphaI)
+    #     self.__betaI = np.array(tBetaI)
+    def __init__(self):
+        self.__betaI = None
+        self.__alphaI = None
+        self.__rho = None
+        self.__betaR = None
+        self.__alphaR = None
+        self.__depth = None
+
+    @property
+    def depth(self):
+        return self.__depth
+
+    @depth.setter
+    def depth(self, aDepth):
+        self.__depth = aDepth
+
+    @property
+    def cp(self):
+        return self.__alphaR
+
+    @cp.setter
+    def cp(self, aAlphaR):
+        self.__alphaR = aAlphaR
+
+    @property
+    def cs(self):
+        return self.__betaR
+
+    @cs.setter
+    def cs(self, aBetaR):
+        self.__betaR = aBetaR
+
+    @property
+    def rho(self):
+        return self.__rho
+
+    @rho.setter
+    def rho(self, aRho):
+        self.__rho = aRho
+
+    @property
+    def apt(self):
+        return self.__alphaI
+
+    @apt.setter
+    def apt(self, aAlphaI):
+        self.__alphaI = aAlphaI
+
+    @property
+    def ast(self):
+        return self.__betaI
+
+    @ast.setter
+    def ast(self, aBetaI):
+        self.__betaI = aBetaI
+
+
+# (4b)
+class BioLayerParam:
+    """
+    Biological Layer Parameters (for attenuation due to fish)
+
+    不用看了，就是没写，谁需要谁写
+    """
+    pass
 
 
 # (5)
@@ -181,24 +277,44 @@ class BottomOption:
 
          BOTOPT  SIGMA BETA fT
 
-    :param bOption: Type of bottom boundary condition.
-    :param bHalfspace: Bottom Halfspace Properties from geoAcoustic values or from grain size
+    :param bOption: String(length 1 or 2). Type of bottom boundary condition.('V''A''R''G''F')
     :param bSigma: Interfacial roughness (m).
+    :param bHalfspace: BottomHalfspace('A') or BottomHalfspaceGrainSize('G') Object.
+                       Bottom Halfspace Properties from geoAcoustic values or from grain size，
     :param bBeta: Power for the power law
     :param bfT: Transition frequency (Hz)
     """
-    def __init__(self, bOption, bHalfspace=None, bSigma=None, bBeta=None, bfT=None):
-        self.__bottomOption = bOption.upper()
+    def __init__(self, bOption, bSigma, bHalfspace=None, bBeta=None, bfT=None):
+        self.__bottomOption = bOption.upper()  # 边界条件类型
+
+        # 检查底部选项字符串的长度，然后检查根据情况对半空间赋值
         if len(bOption) == 1:
             self.__checkBotOpt1(bOption[0])
-            if bOption[0].upper() == 'A' or bOption[0].upper() == 'G':
-                self.__bottomHalfspace = bHalfspace
-                print(type(bHalfspace))
+            if bOption[0].upper() == 'A':
+                if bHalfspace is None:
+                    self.__bottomHalfspace = BottomHalfspace()
+                else:
+                    self.__bottomHalfspace = bHalfspace
+            elif bOption[0].upper() == 'G':
+                if bHalfspace is None:
+                    self.__bottomHalfspace = BottomHalfspaceGrainSize()
+                else:
+                    self.__bottomHalfspace = bHalfspace
         elif len(bOption) == 2:
             self.__checkBotOpt1(bOption[0])
+            if bOption[0].upper() == 'A':
+                if bHalfspace is None:
+                    self.__bottomHalfspace = BottomHalfspace()
+                else:
+                    self.__bottomHalfspace = bHalfspace
+            elif bOption[0].upper() == 'G':
+                if bHalfspace is None:
+                    self.__bottomHalfspace = BottomHalfspaceGrainSize()
+                else:
+                    self.__bottomHalfspace = bHalfspace
             self.__checkBotOpt2(bOption[1])
         else:
-            raise ValueError("Bottom Option Parameter Input Error!")
+            raise ValueError("Bottom Option Parameter Error!")
 
         self.__sigma = bSigma
         self.__beta = bBeta
@@ -217,8 +333,15 @@ class BottomOption:
             raise ValueError("BotOpt(2:2) Parameter Error!")
 
     @property
-    def BottomOpt(self):
+    def Opt(self):
         return self.__bottomOption
+
+    @property
+    def HS(self):
+        """
+        底部声学半空间，
+        """
+        return self.__bottomHalfspace
 
     @property
     def Sigma(self):
@@ -245,7 +368,7 @@ class BottomHalfspace:
     :param bAlphaI: Bottom P-wave attenuation. (units as given by TOPOPT(3:3) )
     :param bBetaI: Bottom S-wave attenuation.
     """
-    def __init__(self, bDepth, bAlphaR=np.array([]), bBetaR=np.array([]), bRho=np.array([]), bAlphaI=np.array([]),
+    def __init__(self, bDepth=None, bAlphaR=np.array([]), bBetaR=np.array([]), bRho=np.array([]), bAlphaI=np.array([]),
                  bBetaI=np.array([])):
         self.__depth = bDepth
         self.__alphaR = np.array(bAlphaR)
@@ -255,28 +378,52 @@ class BottomHalfspace:
         self.__betaI = np.array(bBetaI)
 
     @property
-    def Depth(self):
+    def depth(self):
         return self.__depth
 
+    @depth.setter
+    def depth(self, aDepth):
+        self.__depth = aDepth
+
     @property
-    def AlphaR(self):
+    def cp(self):
         return self.__alphaR
 
+    @cp.setter
+    def cp(self, aAlphaR):
+        self.__alphaR = aAlphaR
+
     @property
-    def BetaR(self):
+    def cs(self):
         return self.__betaR
 
+    @cs.setter
+    def cs(self, aBetaR):
+        self.__betaR = aBetaR
+
     @property
-    def Rho(self):
+    def rho(self):
         return self.__rho
 
-    @property
-    def AlphaI(self):
-        return self.__alphaI
+    @rho.setter
+    def rho(self, aRho):
+        self.__rho = aRho
 
     @property
-    def BetaI(self):
+    def apb(self):
+        return self.__alphaI
+
+    @apb.setter
+    def apb(self, aAlphaI):
+        self.__alphaI = aAlphaI
+
+    @property
+    def asb(self):
         return self.__betaI
+
+    @asb.setter
+    def asb(self, aBetaI):
+        self.__betaI = aBetaI
 
 
 # (6b)
@@ -291,7 +438,7 @@ class BottomHalfspaceGrainSize:
     :param: bDepth: Depth(m)
     :param: bGrainSize: Grain size (phi units).
     """
-    def __init__(self, bDepth, bGrainSize):
+    def __init__(self, bDepth=None, bGrainSize=None):
         self.__depth = bDepth
         self.__grainSize = bGrainSize
 
@@ -299,15 +446,35 @@ class BottomHalfspaceGrainSize:
     def Depth(self):
         return self.__depth
 
+    @Depth.setter
+    def Depth(self, nDepth):
+        self.__depth = nDepth
+
     @property
     def GrainSize(self):
         return self.__grainSize
+
+    @GrainSize.setter
+    def GrainSize(self, nGrainSize):
+        self.__grainSize = nGrainSize
+
+# 无分类
+class Boundary:
+    """
+    边界部分，包括顶部边界和底部边界两个对象
+    """
+    def __init__(self, oTopOpt, oBotOpt):
+        self.Top = oTopOpt
+        self.Bot = oBotOpt
 
 
 # ==================== bellhop部分 ====================
 
 
 # ==================== Kraken部分 ====================
+
+
+
 
 
 if __name__ == '__main__':
@@ -318,6 +485,4 @@ if __name__ == '__main__':
     betaI = 0  # s wave atten
     rhob = 1600
 
-    hs = BottomHalfspace(5000, alphaR, betaR, rhob, alphaI, betaI)
-    b = BottomOption('A*', hs)
-    print(b.BottomOpt, hs.Depth)
+
