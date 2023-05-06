@@ -6,7 +6,7 @@
     @Date: 2023/5/4
     @Description: 
 """
-import env
+from env import *
 import numpy as np
 from math import pi
 
@@ -33,7 +33,14 @@ def crci(c, alpha, freq, AttenUnit):
      W for dB/wavelength (W for Wavelength)
      Q for Q
      T for Thorpe
+
+     :param: c
+     :param: alpha
+     :param: freq
+     :param: AttenUnit
     """
+    global T, S, pH, z_bar  # 这些好像也没参与计算，也没有明显的调用
+
     omega = 2.0 * pi * freq
 
     # *** Convert to Nepers/m ***
@@ -139,7 +146,7 @@ def ssp():
 def step():
     pass
 
-=========== topbot 函数得重新写 ==========
+
 def topbot(fid, freq, BCType, AttenUnit):
     """
     Handles top and bottom boundary conditions
@@ -170,17 +177,51 @@ def topbot(fid, freq, BCType, AttenUnit):
     elif BCType == 'P':
         print('    reading PRECALCULATED IRC')
     else:
-        raise ValueError( 'Fatal error: Unknown boundary condition type' )
+        raise ValueError('Fatal error: Unknown boundary condition type')
 
     # ****** Read in BC parameters depending on particular choice ******
     cp = 0.0
     cs = 0.0
     rho = 0.0
 
-    if BCType == 'A':
-        pass # =============================================================================待补充======
+    HS = TopHalfspace()  # Top Halfspace
+    # lineID = 0  # 读之前先加1
 
-    return cp, cs, rho, HS
+    # ACOUSTO-ELASTIC half-space.
+    # Requires another line with the halfspace parameters as described in env block (4a).
+    # *** Half-space properties ***
+    if BCType == 'A':
+        # tmp = fid[lineID]
+        tmp = next(fid)
+        # lineID += 1
+        tmp = [x for x in tmp if x[0].isnumeric()]  # filter out non numbers
+        num_vals = len(tmp)
+        if num_vals == 6:
+            ztmp, alphaR, betaR, rhoR, alphaI, betaI = [float(x) for x in tmp[0:6]]
+        elif num_vals == 5:
+            ztmp, alphaR, betaR, rhoR, alphaI = [float(x) for x in tmp[0:5]]
+        elif num_vals == 4:
+            ztmp, alphaR, betaR, rhoR = [float(x) for x in tmp[0:4]]
+        elif num_vals == 3:
+            ztmp, alphaR, betaR = [float(x) for x in tmp[0:3]]
+        elif num_vals == 2:
+            ztmp, alphaR = [float(x) for x in tmp[0:2]]
+        elif num_vals == 1:
+            ztmp = [float(x) for x in tmp][0]
+        else:  # there were no vals to read in so defaults will be used
+            pass
+
+        cp = crci(alphaR, alphaI, freq, AttenUnit)
+        cs = crci(betaR, betaI, freq, AttenUnit)
+        rho = rhoR
+
+        HS.cp = alphaR
+        HS.apt = alphaI
+        HS.cs = betaR
+        HS.ast = betaI
+        HS.rho = rhoR
+
+    return cp, cs, rho, HS, fid
 
 
 

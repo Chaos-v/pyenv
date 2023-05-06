@@ -11,9 +11,10 @@ from scipy.interpolate import interp1d
 import numpy as np
 
 
-class EnvFile:
+class Env:
     def __init__(self):
-        pass
+        self.__title = Title()
+
 
 
 class Model(str, Enum):
@@ -68,6 +69,7 @@ class Frequency:
 # (3)
 class NumberOfMedia:
     """
+    Number of media.
     The problem is divided into media within which it is assumed that the material properties vary smoothly.
     A new medium should be used at fluid/elastic interfaces or at interfaces where the density changes discontinuously.
     The number of media in the problem is defined excluding the upper and lower half-space.
@@ -92,11 +94,21 @@ class TopOption:
     """
     Top Option.
 
-    :param: sTopOpt: 长度小于7的字符串
+    :param: aTopOpt: 长度小于7的字符串
+    :param: aTopHS: 半空间参数细节
     """
-    def __init__(self, sTopOpt, oTopHalfspace=None):
-        self.__topOpt = sTopOpt
-        self.__topHS = oTopHalfspace
+    def __init__(self, aTopOpt="", aTopHS=None):
+        if aTopOpt == "":
+            self.__topOpt = aTopOpt
+        else:
+            self.__topOpt = str(aTopOpt).upper()  # 边界条件类型
+
+        if aTopHS is None:
+            self.__topHS = TopHalfspace()
+        else:
+            self.__topHS = aTopHS
+
+        self.BC = None  # 我也不知道这什么逼玩意儿，函数中有就得写
 
     @property
     def Opt(self):
@@ -117,14 +129,9 @@ class TopOption:
 
 # (4a)
 class TopHalfspace:
-    # def __init__(self, tDepth=None, tAlphaR=np.array([]), tBetaR=np.array([]), tRho=np.array([]), tAlphaI=np.array([]),
-    #              tBetaI=np.array([])):
-    #     self.__depth = tDepth
-    #     self.__alphaR = np.array(tAlphaR)
-    #     self.__betaR = np.array(tBetaR)
-    #     self.__rho = np.array(tRho)
-    #     self.__alphaI = np.array(tAlphaI)
-    #     self.__betaI = np.array(tBetaI)
+    """
+    Top Halfspace Properties
+    """
     def __init__(self):
         self.__betaI = None
         self.__alphaI = None
@@ -205,7 +212,9 @@ class SSP:
     :param cAP: 衰减 (p-wave)，numpy一维向量
     :param cAS: 剪切衰减，numpy一维向量
     """
-    def __init__(self, nmesh, cZ, cCP, cCS=None, cRho=None, cAP=None, cAS=None):
+    def __init__(self, nmesh=None, cZ=None, cCP=None, cCS=None, cRho=None, cAP=None, cAS=None):
+        if nmesh is None:
+            nmesh = []
         self.__nMesh = nmesh
         self.__z = cZ  # 深度
         self.__cp = cCP  # 声速
@@ -214,12 +223,18 @@ class SSP:
         self.__ap = cAP  # 衰减 (alpha (z))
         self.__as = cAS  # 剪切衰减
 
-        self.__sspF = None
-        self.betaI_f = None
-        self.betaR_f = None
-        self.rho_f = None
-        self.alphaR_f = None
-        self.alphaI_f = None
+        # self.__sspF = None
+        # self.betaI_f = None
+        # self.betaR_f = None
+        # self.rho_f = None
+        # self.alphaR_f = None
+        # self.alphaI_f = None
+
+        # The Francois-Garrison formula depends on salinity (S), temperature (T), pH, and depth (z_bar).
+        # That information is then provided on the line immediately following
+        # 为什么不私有化了：懒，还有就是写烦了
+        self.francoisGarrisonParam = {}  # 仅当 TOPOPT(4:4)=F 时
+
 
     @property
     def NMesh(self):
@@ -249,20 +264,20 @@ class SSP:
     def AS(self):
         return self.__as
 
-    @property
-    def sspFigure(self):
-        return self.__sspF
+    # @property
+    # def sspFigure(self):
+    #     return self.__sspF
 
-    def makeSSPf(self):
-        self.__sspF = interp1d(self.Depth, self.CP)
-
-    def interpAll(self):
-        self.betaI_f = interp1d(self.Depth, self.AS)
-        self.betaR_f = interp1d(self.Depth, self.CS)
-        self.rho_f = interp1d(self.Depth, self.RHO)
-        self.alphaR_f = interp1d(self.Depth, self.CP)
-        self.alphaI_f = interp1d(self.Depth, self.AP)
-        return self.alphaR_f, self.betaR_f, self.rho_f, self.alphaI_f, self.betaI_f
+    # def makeSSPf(self):
+    #     self.__sspF = interp1d(self.Depth, self.CP)
+    #
+    # def interpAll(self):
+    #     self.betaI_f = interp1d(self.Depth, self.AS)
+    #     self.betaR_f = interp1d(self.Depth, self.CS)
+    #     self.rho_f = interp1d(self.Depth, self.RHO)
+    #     self.alphaR_f = interp1d(self.Depth, self.CP)
+    #     self.alphaI_f = interp1d(self.Depth, self.AP)
+    #     return self.alphaR_f, self.betaR_f, self.rho_f, self.alphaI_f, self.betaI_f
 
 
 # (6)
@@ -285,56 +300,69 @@ class BottomOption:
     :param bfT: Transition frequency (Hz)
     """
     def __init__(self, bOption, bSigma, bHalfspace=None, bBeta=None, bfT=None):
-        self.__bottomOption = bOption.upper()  # 边界条件类型
+        if bOption is None:
+            self.__bottomOption = bOption
+            if bHalfspace is None:
+                # 如果没有指定半空间细节，默认创建一个对象
+                self.__bottomHalfspace = BottomHalfspace()
 
-        # 检查底部选项字符串的长度，然后检查根据情况对半空间赋值
-        if len(bOption) == 1:
-            self.__checkBotOpt1(bOption[0])
-            if bOption[0].upper() == 'A':
-                if bHalfspace is None:
-                    self.__bottomHalfspace = BottomHalfspace()
-                else:
-                    self.__bottomHalfspace = bHalfspace
-            elif bOption[0].upper() == 'G':
-                if bHalfspace is None:
-                    self.__bottomHalfspace = BottomHalfspaceGrainSize()
-                else:
-                    self.__bottomHalfspace = bHalfspace
-        elif len(bOption) == 2:
-            self.__checkBotOpt1(bOption[0])
-            if bOption[0].upper() == 'A':
-                if bHalfspace is None:
-                    self.__bottomHalfspace = BottomHalfspace()
-                else:
-                    self.__bottomHalfspace = bHalfspace
-            elif bOption[0].upper() == 'G':
-                if bHalfspace is None:
-                    self.__bottomHalfspace = BottomHalfspaceGrainSize()
-                else:
-                    self.__bottomHalfspace = bHalfspace
-            self.__checkBotOpt2(bOption[1])
         else:
-            raise ValueError("Bottom Option Parameter Error!")
+            self.__bottomOption = str(bOption).upper()  # 边界条件类型
+            self.__bottomHalfspace = self.__createHalfspaceObject(self.__checkBotOpt(bOption), bHalfspace)
 
         self.__sigma = bSigma
         self.__beta = bBeta
         self.__fT = bfT
 
     @staticmethod
-    def __checkBotOpt1(s):
+    def __checkBotOpt(s):
+        """
+        检查参数是否存在
+
+        :param s: BotOpt string
+        :return: 1 BottomHalfspace 对象，对应参数 'A'
+        :return: 2 BottomHalfspaceGrainSize 对象，对应参数 'G'
+        :return: 0 什么都没有
+        """
         botOpt1 = ['V', 'A', 'R', 'G', 'F', 'P']
-        if s[0] not in botOpt1:
-            raise ValueError("BotOpt(1:1) Parameter Error!")
+        botOpt2 = ['~', '_', '*']
+        if 0 < len(s) <= 2:
+            if len(s) == 2 and s[1] not in botOpt2:
+                raise ValueError("BotOpt(2:2) Parameter Error!")
+            if s[0] not in botOpt1:
+                raise ValueError("BotOpt(1:1) Parameter Error!")
+            else:
+                if s[0] == 'A':
+                    return 1
+                elif s[0] == 'G':
+                    return 2
+                else:
+                    return 0
+        else:
+            raise ValueError("Bottom Option Parameter Error!")
 
     @staticmethod
-    def __checkBotOpt2(s):
-        botOpt2 = ['~', '_', '*']
-        if s not in botOpt2:
-            raise ValueError("BotOpt(2:2) Parameter Error!")
+    def __createHalfspaceObject(n, sHS):
+        """根据输入值创建不同的Halfspace对象"""
+        if n == 0:
+            return sHS
+        elif n == 1:
+            return BottomHalfspace()
+        elif n == 2:
+            BottomHalfspaceGrainSize()
+        else:
+            raise ValueError("Parameter Error!")
 
     @property
     def Opt(self):
         return self.__bottomOption
+
+    @Opt.setter
+    def Opt(self, aBotOpt: str):
+        # 检查底部选项字符串的长度，然后检查根据情况对半空间赋值
+        sOpt = aBotOpt.upper()
+        self.__checkBotOpt(sOpt)
+        self.__bottomOption = sOpt
 
     @property
     def HS(self):
@@ -342,6 +370,10 @@ class BottomOption:
         底部声学半空间，
         """
         return self.__bottomHalfspace
+
+    @HS.setter
+    def HS(self, botHS):
+        self.__bottomHalfspace = botHS
 
     @property
     def Sigma(self):
@@ -358,18 +390,18 @@ class BottomOption:
 
 # (6a)
 class BottomHalfspace:
-    """
-    Bottom Halfspace Properties from geoAcoustic values.
-
-    :param bDepth: Depth (m)
-    :param bAlphaR: Bottom P-wave speed (m/s).
-    :param bBetaR: Bottom S-wave speed (m/s).
-    :param bRho: Bottom density (g/cm3).
-    :param bAlphaI: Bottom P-wave attenuation. (units as given by TOPOPT(3:3) )
-    :param bBetaI: Bottom S-wave attenuation.
-    """
     def __init__(self, bDepth=None, bAlphaR=np.array([]), bBetaR=np.array([]), bRho=np.array([]), bAlphaI=np.array([]),
                  bBetaI=np.array([])):
+        """
+            Bottom Halfspace Properties from geoAcoustic values.
+
+            :param bDepth: Depth (m)
+            :param bAlphaR: Bottom P-wave speed (m/s).
+            :param bBetaR: Bottom S-wave speed (m/s).
+            :param bRho: Bottom density (g/cm3).
+            :param bAlphaI: Bottom P-wave attenuation. (units as given by TOPOPT(3:3) )
+            :param bBetaI: Bottom S-wave attenuation.
+        """
         self.__depth = bDepth
         self.__alphaR = np.array(bAlphaR)
         self.__betaR = np.array(bBetaR)
@@ -458,23 +490,21 @@ class BottomHalfspaceGrainSize:
     def GrainSize(self, nGrainSize):
         self.__grainSize = nGrainSize
 
+
 # 无分类
 class Boundary:
     """
     边界部分，包括顶部边界和底部边界两个对象
     """
-    def __init__(self, oTopOpt, oBotOpt):
-        self.Top = oTopOpt
-        self.Bot = oBotOpt
+    def __init__(self):
+        self.Top = TopOption()
+        self.Bot = BottomOption(None, None)
 
 
 # ==================== bellhop部分 ====================
 
 
 # ==================== Kraken部分 ====================
-
-
-
 
 
 if __name__ == '__main__':
@@ -484,5 +514,7 @@ if __name__ == '__main__':
     alphaI = .5  # p wave atten
     betaI = 0  # s wave atten
     rhob = 1600
+    a = BottomOption('A', 0.0)
 
-
+    b = BottomOption(None, None)
+    b.Opt = 'A'
