@@ -163,6 +163,13 @@ def topbot(fid, freq, BCType, AttenUnit):
     """
     global alphaR, betaR, rhoR, alphaI, betaI
 
+    # 不加就会报错，我也很绝望啊，可能时global没搞清楚吧
+    alphaR = 1500  # defaults
+    betaR = 0
+    rhoR = 1
+    alphaI = 0
+    betaI = 0
+
     # *** Echo to PRTFIL user's choice of boundary condition ***
     if BCType == 'V':
         print('    VACUUM')
@@ -185,16 +192,21 @@ def topbot(fid, freq, BCType, AttenUnit):
     rho = 0.0
 
     HS = TopHalfspace()  # Top Halfspace
-    # lineID = 0  # 读之前先加1
 
     # ACOUSTO-ELASTIC half-space.
     # Requires another line with the halfspace parameters as described in env block (4a).
     # *** Half-space properties ***
     if BCType == 'A':
-        # tmp = fid[lineID]
         tmp = next(fid)
-        # lineID += 1
-        tmp = [x for x in tmp if x[0].isnumeric()]  # filter out non numbers
+        # tmp = [x for x in tmp if x[0].isnumeric()]  # filter out non numbers
+        try:
+            endIndex = tmp.index('/')
+            tmp = tmp[:endIndex].split()
+        except ValueError:
+            print("ENVFILE Format Error!")
+        except Exception as err:
+            print("Fatal Error! Error Type:\n\t" + repr(err))
+
         num_vals = len(tmp)
         if num_vals == 6:
             ztmp, alphaR, betaR, rhoR, alphaI, betaI = [float(x) for x in tmp[0:6]]
@@ -210,6 +222,8 @@ def topbot(fid, freq, BCType, AttenUnit):
             ztmp = [float(x) for x in tmp][0]
         else:  # there were no vals to read in so defaults will be used
             pass
+
+        print('%10.2f    %10.2f    %10.2f    %10.2f    %10.4f    %10.4f \n' % (ztmp, alphaR, betaR, rhoR, alphaI, betaI))
 
         cp = crci(alphaR, alphaI, freq, AttenUnit)
         cs = crci(betaR, betaI, freq, AttenUnit)

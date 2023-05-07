@@ -6,25 +6,58 @@
     @Date: 2023/3/30
     @Description: 对环境文件中的各个组成部分进行抽象，目前适配 bellhop
 """
-from enum import Enum
-from scipy.interpolate import interp1d
+# from enum import Enum
+# from scipy.interpolate import interp1d
 import numpy as np
 
 
-class Env:
-    def __init__(self):
-        self.__title = Title()
-
-
-
-class Model(str, Enum):
+class EnvObj:
     """
-    枚举类
+    ENV 文件对象
+
+    :param oTitle: Title 对象
+    :param oFreq: Frequency 对象
+    :param oNMedia: NumberOfMedia 对象
+    :param oBdry: Boundary 对象，包括顶部和底部两个部分的参数
+    :param oSSP: SSP 对象
+
     """
-    BELLHOP = 'bellhop'
-    KRAKEN = 'kraken'
-    SCOOTER = 'scooter'
-    SPARC = 'sparc'
+    def __init__(self, oTitle, oFreq, oNMedia, oBdry, oSSP):
+        self.__title = oTitle
+        self.__freq = oFreq
+        self.__nmedia = oNMedia
+        self.__bdry = oBdry
+        self.__ssp = oSSP
+
+    @property
+    def title(self):
+        return self.__title.getTitle()
+
+    @property
+    def freq(self):
+        return self.__freq.freq
+
+    @property
+    def nmedia(self):
+        return self.__nmedia.NMedia
+
+    @property
+    def bdry(self):
+        return self.__bdry
+
+    @property
+    def ssp(self):
+        return self.__ssp
+
+
+# class Model(str, Enum):
+#     """
+#     枚举类
+#     """
+#     BELLHOP = 'bellhop'
+#     KRAKEN = 'kraken'
+#     SCOOTER = 'scooter'
+#     SPARC = 'sparc'
 
 
 # ==================== bellhop及kraken通用部分 ====================
@@ -200,11 +233,11 @@ class BioLayerParam:
 
 
 # (5)
-class SSP:
+class SoundSpeedProfile:
     """
     声速剖面部分
 
-    :param nmesh: list，包括[NMESH, SIGMA, Z(nSSP)]
+    :param cNmesh: list，包括[NMESH, SIGMA, Z(nSSP)]
     :param cZ: 声速剖面中的水深，numpy的一维向量，Z(nSSP)
     :param cCP: 声速剖面中的声速，numpy一维向量，CP(nSSP)
     :param cCS: 剪切波速度，numpy一维向量
@@ -212,10 +245,12 @@ class SSP:
     :param cAP: 衰减 (p-wave)，numpy一维向量
     :param cAS: 剪切衰减，numpy一维向量
     """
-    def __init__(self, nmesh=None, cZ=None, cCP=None, cCS=None, cRho=None, cAP=None, cAS=None):
-        if nmesh is None:
-            nmesh = []
-        self.__nMesh = nmesh
+    def __init__(self, cNmesh=None, cSigma=None, cDepth=None, cZ=None, cCP=None, cCS=None, cRho=None, cAP=None, cAS=None):
+        # ssp部分第一行三个参数
+        self.__nMesh = cNmesh
+        self.__sigma = cSigma
+        self.__depth = cDepth
+        # ssp部分剖面部分
         self.__z = cZ  # 深度
         self.__cp = cCP  # 声速
         self.__cs = cCS  # 剪切波速度
@@ -237,11 +272,19 @@ class SSP:
 
 
     @property
-    def NMesh(self):
+    def NMESH(self):
         return self.__nMesh
 
     @property
-    def Depth(self):
+    def DEPTH(self):
+        return self.__depth
+
+    @property
+    def SIGMA(self):
+        return self.__sigma
+
+    @property
+    def Z(self):
         return self.__z
 
     @property
@@ -325,7 +368,7 @@ class BottomOption:
         :return: 0 什么都没有
         """
         botOpt1 = ['V', 'A', 'R', 'G', 'F', 'P']
-        botOpt2 = ['~', '_', '*']
+        botOpt2 = ['~', '_', '*', ' ']
         if 0 < len(s) <= 2:
             if len(s) == 2 and s[1] not in botOpt2:
                 raise ValueError("BotOpt(2:2) Parameter Error!")

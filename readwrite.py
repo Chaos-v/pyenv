@@ -133,20 +133,21 @@ def read_env_core(envfil):
     Bdry.Top.cp, Bdry.Top.cs, Bdry.Top.rho, Bdry.Top.HS, fid = topbot(fid, freq, Bdry.Top.BC, AttenUnit)
 
     # main loop to readin in SSP
-    print('       z          alphaR         betaR           rho        alphaI         betaI');
-    print('      (m)          (m/s)         (m/s)         (g/cm^3)      (m/s)         (m/s) ');
+    print('       z          alphaR         betaR           rho        alphaI         betaI')
+    print('      (m)          (m/s)         (m/s)         (g/cm^3)      (m/s)         (m/s) ')
 
     sspDict = {}
     sspDict['z'] = []
     sspDict['c'] = []
     sspDict['cs'] = []
     sspDict['rho'] = []
+    sspDict['ap'] = []
+    sspDict['as'] = []
 
     sspDict['N'] = [0] * NMedia
     sspDict['sigma'] = [0] * NMedia
     sspDict['depth'] = [0] * (NMedia + 1)
-    # ==========> 指向 class SSP.NMesh
-    sspDict['raw'] = []
+
     sspDict['cz'] = []
     sspDict['Npts'] = [0] * NMedia
 
@@ -156,7 +157,7 @@ def read_env_core(envfil):
         if medium == 0:
             Loc[medium] = 0
         else:
-            Loc[medium] = Loc[medium - 1] + SSP.Npts(medium - 1)
+            Loc[medium] = Loc[medium - 1] + sspDict['Npts'][medium - 1]
 
         # NMesh 部分，这部分只要读的时候有标点符号就会报错，不管了
         tmp = next(fid).split()
@@ -165,16 +166,107 @@ def read_env_core(envfil):
         print('    ( Number of points = %d  Roughness = %6.2f  Depth = %8.2f )' % (sspDict['N'][medium], sspDict['sigma'][medium], sspDict['depth'][medium+1]))
 
         # read in the SSP
+        for ii in range(9999999):
+            tmp = next(fid).split()
+            tmp = [x for x in tmp if x[0].isnumeric()]  # filter out non numbers
 
-    print("function end")
+            num_vals = len(tmp)
+            if num_vals == 6:
+                ztmp, alphaR, betaR, rhoR, alphaI, betaI = [float(x) for x in tmp[0:6]]
+            elif num_vals == 5:
+                ztmp, alphaR, betaR, rhoR, alphaI = [float(x) for x in tmp[0:5]]
+            elif num_vals == 4:
+                ztmp, alphaR, betaR, rhoR = [float(x) for x in tmp[0:4]]
+            elif num_vals == 3:
+                ztmp, alphaR, betaR = [float(x) for x in tmp[0:3]]
+            elif num_vals == 2:
+                ztmp, alphaR = [float(x) for x in tmp[0:2]]
+            elif num_vals == 1:
+                ztmp = [float(x) for x in tmp[0]][0]
+            else:  # there were no vals to read in so defaults will be used
+                pass
 
+            print('%10.2f    %10.2f    %10.2f    %10.2f    %10.4f    %10.4f ' % (ztmp, alphaR, betaR, rhoR, alphaI, betaI))
 
+            # TRANSLATE CRCI, IN BELLHOP DIR
+            cp = crci(alphaR, alphaI, freq, AttenUnit)
+            cs = crci(betaR, betaI, freq, AttenUnit)
+            sspDict['z'].append(ztmp)  # add in to existing vector
+            sspDict['c'].append(cp)
+            sspDict['cs'].append(cs)
+            sspDict['rho'].append(rhoR)
 
+            if (ztmp == sspDict['depth'][medium + 1]):
+                sspDict['depth'][0] = sspDict['z'][0]
+                # break
+                break
 
+        # calculate mesh automatically
+        if sspDict['N'][medium] == 0:  # calculate mesh automatically
+            # choose a reference sound speed
+            C = alphaR
+            if betaR > 0.0:
+                C = betaR  # shear?
+            deltaZ = 0.05 * C / freq  # default sampling: 20 points per wavelength
+            sspDict['N'][medium] = round((sspDict['depth'][medium + 1] - sspDict['depth'][medium]) / deltaZ)
+            sspDict['N'][medium] = np.max([sspDict['N'][medium], 10])  # require a minimum of 10 points
 
+        print('    Number of points = %i ' % sspDict['N'][medium])
+
+        # keep track of first and last acoustic medium
+        if not np.any(cs):  # shear anywhere?
+            if NFirstAcoustic == 0:
+                NFirstAcoustic = medium
+            NLastAcoustic = medium
+
+        # stuff for Bellhop
+        if medium == 0:
+            HV = np.diff(np.array(sspDict['z']))  # layer thicknesses
+            sspDict['cz'] = np.diff(np.array(sspDict['c'])) / HV  # gradient of ssp (centered-difference approximation)
+        sspDict['Npts'][medium] = ii
+        if (medium == 0):
+            sspDict['depth'][0] = sspDict['z'][0]
+
+    # ==========> 指向 class SoundSpeedProfile
+    SSP = SoundSpeedProfile(sspDict['N'], sspDict['sigma'], sspDict['depth'], sspDict['z'], sspDict['c'],
+                            sspDict['cs'], sspDict['rho'], sspDict['ap'], sspDict['as'])
+    SSP.cz = sspDict['cz']
+
+    # lower halfspace
+    # .m ver 中这个部分根本没有管参数 Sigma 和 Beta 以及 ft，我也就不多事儿了
+    tmp = next(fid)
+    BotOpt = findall('\'(.*)\'', tmp)[0]
+    BotOpt = BotOpt + ' '*(3 - (len(BotOpt)+1))
+
+    if BotOpt[1] == '*':
+        BotOpt = BotOpt[: -1] + '~'
+    Bdry.Bot.Opt = BotOpt
+    Bdry.Bot.BC = Bdry.Bot.Opt[0]  # 出だ！意味不明のBCが出だ！
+
+    Bdry.Bot.cp, Bdry.Bot.cs, Bdry.Bot.rho, Bdry.Bot.HS, fid = topbot(fid, freq, Bdry.Bot.BC, AttenUnit)
+    Bdry.Top.HS.depth = sspDict['depth'][0]
+    Bdry.Bot.HS.depth = sspDict['depth'][NMedia]
+
+    # Get rho, c just INSide the boundary (used later for reflection
+    # coefficients)
+    I = NFirstAcoustic
+    Bdry.Top.rhoIns = sspDict['rho'][I]
+    Bdry.Top.cIns = sspDict['c'][I]
+
+    I = Loc[NLastAcoustic] + sspDict['Npts'][NLastAcoustic]
+    Bdry.Bot.rhoIns = sspDict['rho'][I]
+    Bdry.Bot.cIns = sspDict['c'][I]
+
+    envCore = EnvObj(TITLE, FREQ, NMEDIA, Bdry, SSP)
+
+    # 其实输出两个文件就行，没必要这么多输出
+    # return TitleEnv, freq, sspDict, Bdry, fid, env
+    return envCore, fid
 
 
 if __name__ == '__main__':
     print("========================================")
     envfile = 'C:\\Users\\Chaos\\Desktop\\Acoustics-Toolbox-Release_2022\\teatChaos\\Munk.env'
-    read_env_core(envfile)
+    envCore, fid = read_env_core(envfile)
+
+    print("========== Program end. Debug End ==========")
