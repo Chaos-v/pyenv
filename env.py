@@ -26,24 +26,29 @@ class EnvObj:
         self.__title = oTitle
         self.__freq = oFreq
         self.__nmedia = oNMedia
-        self.__bdry = oBdry
+        self.__topOpt = oBdry.Top
+        self.__botOpt = oBdry.Bot
         self.__ssp = oSSP
 
     @property
-    def title(self):
+    def Title(self):
         return self.__title.getTitle()
 
     @property
-    def freq(self):
+    def Freq(self):
         return self.__freq.freq
 
     @property
-    def nmedia(self):
+    def NMedia(self):
         return self.__nmedia.NMedia
 
     @property
-    def bdry(self):
-        return self.__bdry
+    def Top(self):
+        return self.__topOpt
+
+    @property
+    def Bot(self):
+        return self.__botOpt
 
     @property
     def ssp(self):
@@ -235,7 +240,7 @@ class BioLayerParam:
 # (5)
 class SoundSpeedProfile:
     """
-    声速剖面部分
+    声速剖面部分，包括读取 ENV 文件的核心以及按照介质数量划分数据的 SSPRaw 对象
 
     :param cNmesh: list，包括[NMESH, SIGMA, Z(nSSP)]
     :param cZ: 声速剖面中的水深，numpy的一维向量，Z(nSSP)
@@ -258,12 +263,7 @@ class SoundSpeedProfile:
         self.__ap = cAP  # 衰减 (alpha (z))
         self.__as = cAS  # 剪切衰减
 
-        # self.__sspF = None
-        # self.betaI_f = None
-        # self.betaR_f = None
-        # self.rho_f = None
-        # self.alphaR_f = None
-        # self.alphaI_f = None
+        self.__sspRaw = []  # 包含 SSPRaw 对象的列表
 
         # The Francois-Garrison formula depends on salinity (S), temperature (T), pH, and depth (z_bar).
         # That information is then provided on the line immediately following
@@ -307,12 +307,20 @@ class SoundSpeedProfile:
     def AS(self):
         return self.__as
 
+    @property
+    def raw(self):
+        return self.__sspRaw
+
+    @raw.setter
+    def raw(self, nList):
+        self.__sspRaw = nList
+
     # @property
     # def sspFigure(self):
     #     return self.__sspF
 
     # def makeSSPf(self):
-    #     self.__sspF = interp1d(self.Depth, self.CP)
+    #     self.__sspF = interp1d(self.DEPTH, self.CP)
     #
     # def interpAll(self):
     #     self.betaI_f = interp1d(self.Depth, self.AS)
@@ -321,6 +329,50 @@ class SoundSpeedProfile:
     #     self.alphaR_f = interp1d(self.Depth, self.CP)
     #     self.alphaI_f = interp1d(self.Depth, self.AP)
     #     return self.alphaR_f, self.betaR_f, self.rho_f, self.alphaI_f, self.betaI_f
+
+
+class SSPRaw:
+    """
+    每一个 SSPRaw 对象存储一个 NMedia 的 SSP 数据，包括：z, cp, cs, rho, ap, as
+
+    :param z: list Depth，之后转化为一维 numpy 矩阵
+    :param alphaR: list SSP value，之后转化为一维 numpy 矩阵
+    :param betaR: list shear speeds，之后转化为一维 numpy 矩阵
+    :param rho: list density value at the points，之后转化为一维 numpy 矩阵
+    :param alphaI: list attenuation (p-wave)，之后转化为一维 numpy 矩阵
+    :param betaI: list shear attenuation，之后转化为一维 numpy 矩阵
+    """
+    def __init__(self, z, alphaR, betaR, rho, alphaI, betaI):
+        self.__z = np.array(z)
+        self.__cp = np.array(alphaR)  # cp
+        self.__cs = np.array(betaR)  # cs
+        self.__rho = np.array(rho)  # rho
+        self.__ap = np.array(alphaI)  # ap
+        self.__as = np.array(betaI)  # as
+
+    @property
+    def z(self):
+        return self.__z
+
+    @property
+    def cp(self):
+        return self.__cp
+
+    @property
+    def cs(self):
+        return self.__cs
+
+    @property
+    def rho(self):
+        return self.__rho
+
+    @property
+    def AP(self):
+        return self.__ap
+
+    @property
+    def AS(self):
+        return self.__as
 
 
 # (6)
@@ -342,7 +394,7 @@ class BottomOption:
     :param bBeta: Power for the power law
     :param bfT: Transition frequency (Hz)
     """
-    def __init__(self, bOption, bSigma, bHalfspace=None, bBeta=None, bfT=None):
+    def __init__(self, bOption, bSigma=None, bHalfspace=None, bBeta=None, bfT=None):
         if bOption is None:
             self.__bottomOption = bOption
             if bHalfspace is None:
@@ -422,13 +474,26 @@ class BottomOption:
     def Sigma(self):
         return self.__sigma
 
+    @Sigma.setter
+    def Sigma(self, n):
+        self.__sigma = n
+
+
     @property
     def Beta(self):
         return self.__beta
 
+    @Beta.setter
+    def Beta(self, n):
+        self.__beta = n
+
     @property
     def fT(self):
         return self.__fT
+
+    @fT.setter
+    def fT(self, n):
+        self.__fT = n
 
 
 # (6a)
@@ -541,7 +606,7 @@ class Boundary:
     """
     def __init__(self):
         self.Top = TopOption()
-        self.Bot = BottomOption(None, None)
+        self.Bot = BottomOption(None)
 
 
 # ==================== bellhop部分 ====================
@@ -552,12 +617,4 @@ class Boundary:
 
 if __name__ == '__main__':
     print("========================================")
-    alphaR = 1600  # p wave speed in sediment
-    betaR = 0  # no shear wave
-    alphaI = .5  # p wave atten
-    betaI = 0  # s wave atten
-    rhob = 1600
-    a = BottomOption('A', 0.0)
 
-    b = BottomOption(None, None)
-    b.Opt = 'A'

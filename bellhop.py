@@ -200,8 +200,13 @@ def topbot(fid, freq, BCType, AttenUnit):
         tmp = next(fid)
         # tmp = [x for x in tmp if x[0].isnumeric()]  # filter out non numbers
         try:
-            endIndex = tmp.index('/')
-            tmp = tmp[:endIndex].split()
+            if not tmp.find('/') == -1:
+                endIndex = tmp.index('/')
+                tmp = tmp[:endIndex].split()
+                tmp = [x for x in tmp if x[0].isnumeric()]  # filter out non numbers
+            else:
+                tmp = tmp.split()
+                tmp = [x for x in tmp if x[0].isnumeric()]
         except ValueError:
             print("ENVFILE Format Error!")
         except Exception as err:

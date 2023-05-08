@@ -137,6 +137,7 @@ def read_env_core(envfil):
     print('      (m)          (m/s)         (m/s)         (g/cm^3)      (m/s)         (m/s) ')
 
     sspDict = {}
+    # 对应 ztmp, alphaR, betaR, rhoR, alphaI, betaI
     sspDict['z'] = []
     sspDict['c'] = []
     sspDict['cs'] = []
@@ -150,6 +151,8 @@ def read_env_core(envfil):
 
     sspDict['cz'] = []
     sspDict['Npts'] = [0] * NMedia
+
+    ssp_raw_list = []  # 存放对象的的列表
 
     Loc = [0] * NMedia
 
@@ -167,12 +170,23 @@ def read_env_core(envfil):
 
         # read in the SSP
         for ii in range(9999999):
-            tmp = next(fid).split()
-            tmp = [x for x in tmp if x[0].isnumeric()]  # filter out non numbers
+            tmp = next(fid)
+            try:
+                if not tmp.find('/') == -1:
+                    endIndex = tmp.index('/')
+                    tmp = tmp[:endIndex].split()
+                    tmp = [x for x in tmp if x[0].isnumeric()]  # filter out non numbers
+                else:
+                    tmp = tmp.split()
+                    tmp = [x for x in tmp if x[0].isnumeric()]
+            except ValueError:
+                print("ENVFILE Format Error!")
+            except Exception as err:
+                print("Fatal Error! Error Type:\n\t" + repr(err))
 
             num_vals = len(tmp)
             if num_vals == 6:
-                ztmp, alphaR, betaR, rhoR, alphaI, betaI = [float(x) for x in tmp[0:6]]
+                ztmp, alphaR, betaR, rhoR, alphaI, betaI = [float(x) for x in tmp[0:6]]  # z,cp,cs,rho,ap,as
             elif num_vals == 5:
                 ztmp, alphaR, betaR, rhoR, alphaI = [float(x) for x in tmp[0:5]]
             elif num_vals == 4:
@@ -227,16 +241,32 @@ def read_env_core(envfil):
         if (medium == 0):
             sspDict['depth'][0] = sspDict['z'][0]
 
+        # ssp_raw_list
+        index = len(sspDict['z']) - sspDict['Npts'][medium] - 1
+        ssp_raw = SSPRaw(sspDict['z'][index:], sspDict['c'][index:], sspDict['cs'][index:], sspDict['rho'][index:], sspDict['ap'][index:], sspDict['as'][index:])
+        ssp_raw_list.append(ssp_raw)
+
     # ==========> 指向 class SoundSpeedProfile
     SSP = SoundSpeedProfile(sspDict['N'], sspDict['sigma'], sspDict['depth'], sspDict['z'], sspDict['c'],
                             sspDict['cs'], sspDict['rho'], sspDict['ap'], sspDict['as'])
     SSP.cz = sspDict['cz']
+    SSP.raw = ssp_raw_list
 
     # lower halfspace
-    # .m ver 中这个部分根本没有管参数 Sigma 和 Beta 以及 ft，我也就不多事儿了
     tmp = next(fid)
     BotOpt = findall('\'(.*)\'', tmp)[0]
     BotOpt = BotOpt + ' '*(3 - (len(BotOpt)+1))
+
+    # .m version 中这个部分根本没有管参数 Sigma 和 Beta 以及 ft，这边加上，万一报错再看怎么修改
+    if tmp.find('!') == -1:
+        tmp = tmp.split()
+    else:
+        tmp = tmp[:tmp.index('!')].split()
+    num_vals = len(tmp)
+    if num_vals == 4:
+        Bdry.Bot.Sigma, Bdry.Bot.Beta, Bdry.Bot.fT = [float(x) for x in tmp[1:]]
+    elif num_vals == 2:
+        Bdry.Bot.Sigma = float(tmp[1])
 
     if BotOpt[1] == '*':
         BotOpt = BotOpt[: -1] + '~'
@@ -266,7 +296,7 @@ def read_env_core(envfil):
 
 if __name__ == '__main__':
     print("========================================")
-    envfile = 'C:\\Users\\Chaos\\Desktop\\Acoustics-Toolbox-Release_2022\\teatChaos\\Munk.env'
+    envfile = 'C:\\Users\\Chaos\\Desktop\\Acoustics-Toolbox-Release_2022\\teatChaos\\Munkk.env'
     envCore, fid = read_env_core(envfile)
 
     print("========== Program end. Debug End ==========")
