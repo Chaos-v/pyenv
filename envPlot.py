@@ -9,7 +9,7 @@
 import os
 import readwrite
 import numpy as np
-from scipy.interpolate import interp1d, CubicSpline
+from scipy.interpolate import interp1d, CubicSpline, pchip_interpolate
 import matplotlib.pyplot as plt
 
 
@@ -52,15 +52,15 @@ def plotssp(envfil):
         if SSPType == 'N':  # n^2 Linear
             f = interp1d(SSP.raw[medium].z, 1.0/np.square(SSP.raw[medium].cp))
             n2_eval = f(z_eval)
-            c_eval = 1/np.sqrt(n2_eval)
+            c_eval = (1/np.sqrt(n2_eval)).real
         elif SSPType == 'P':
-            raise ValueError("学艺不精，不知道用什么函数，姑且先报个错提醒一下")
+            c_eval = pchip_interpolate(SSP.raw[medium].z, SSP.raw[medium].cp.real, z_eval)
         elif SSPType == 'S':  # Cubic Spline using not-a-knot boundary condition
-            f = CubicSpline(SSP.raw[medium].z, SSP.raw[medium].cp)
+            f = CubicSpline(SSP.raw[medium].z, SSP.raw[medium].cp.real)
             c_eval = f(z_eval)
         else:  # % piecewise Linear
             f = interp1d(SSP.raw[medium].z, SSP.raw[medium].cp)
-            c_eval = f(z_eval)
+            c_eval = f(z_eval).real
 
         plt.figure(num=1, layout='constrained')
         plt.plot(c_eval.real, z_eval, color='b', linestyle='-', linewidth=2)
@@ -71,15 +71,14 @@ def plotssp(envfil):
             if SSPType == 'N':
                 f = interp1d(SSP.raw[medium].z, 1.0 / np.square(SSP.raw[medium].cs))
                 n2_eval = f(z_eval)
-                c_eval = 1 / np.sqrt(n2_eval)
+                c_eval = (1 / np.sqrt(n2_eval)).real
             elif SSPType == 'P':
-                raise ValueError("学艺不精，不知道用什么函数，姑且先报个错提醒一下")
+                c_eval = pchip_interpolate(SSP.raw[medium].z, SSP.raw[medium].cs.real, z_eval)
             elif SSPType == 'S':
-                f = interp1d(SSP.raw[medium].z, SSP.raw[medium].cs, kind='cubic', fill_value='extrapolate')
-                c_eval = f(z_eval).real
-            else:  # % piecewise Linear
-                f = interp1d(SSP.raw[medium].z, SSP.raw[medium].cs)
+                f = CubicSpline(SSP.raw[medium].z, SSP.raw[medium].cs.real)
                 c_eval = f(z_eval)
+            else:  # % piecewise Linear
+                pass  # matlab version 就没写
             plt.close()
             plt.figure(num=1, layout='constrained')
             plt.scatter(SSP.raw[medium].cs, SSP.raw[medium].z, marker='o', color='b')
@@ -99,7 +98,3 @@ if __name__ == '__main__':
     envCore = plotssp(envfile)
 
     print('==================== 测试结束 ====================')
-
-
-
-

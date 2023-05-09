@@ -243,8 +243,6 @@ def topbot(fid, freq, BCType, AttenUnit):
     return cp, cs, rho, HS, fid
 
 
-
-
 def trace():
     pass
 
